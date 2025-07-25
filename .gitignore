@@ -1,0 +1,15 @@
+# Ignore vendor directory (not tracked in git; generate locally if needed)
+vendor/
+
+# Node modules, build, and OS files
+node_modules/
+dist/
+*.log
+*.tmp
+*.swp
+.idea/
+.DS_Store
+
+# Uncomment the following if you want to ignore Go build cache (but keep vendor)
+# /bin/
+# /pkg/ 

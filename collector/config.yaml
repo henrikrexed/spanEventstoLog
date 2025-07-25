@@ -1,0 +1,93 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  filelog:
+    include: [ /var/log/app/*.log ]
+    operators:
+      - type: regex_parser
+        regex: '^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<severity>\w+) (?P<message>.*)$'
+        timestamp:
+          parse_from: time
+          layout: '2006-01-02 15:04:05'
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1500
+
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+
+  resource:
+    attributes:
+      - key: environment
+        value: "production"
+        action: insert
+
+  cumulativetodelta:
+    include:
+      match_type: regexp
+      metrics: [.*]
+
+  transform:
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["processed"], true)
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["processed"], true)
+
+  filter:
+    spans:
+      include:
+        match_type: regexp
+        services: [.*]
+        span_names: [.*]
+
+connectors:
+  spaneventstolog:
+    span_conditions:
+      - "attributes[\"http.status_code\"] == 503"
+      - "status.code == STATUS_CODE_ERROR"
+    event_conditions:
+      - "name == \"exception\""
+      - "attributes[\"exception.type\"] == \"requests.exceptions.ConnectionError\""
+    include_span_attributes: true
+    include_event_attributes: true
+    log_level: "Error"
+    log_body_template: "Connection Error in {{.SpanName}}: {{.EventName}} - {{.EventAttributes.exception.message}}"
+
+exporters:
+  otlp:
+    endpoint: "http://localhost:4317"
+    tls:
+      insecure: true
+
+  otlphttp:
+    endpoint: "http://localhost:4318"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, k8sattributes, resource, transform, filter, batch]
+      exporters: [otlp,spaneventstolog]
+    logs:
+      receivers: [filelog,spaneventstolog]
+      processors: [memory_limiter, k8sattributes, resource, transform, batch]
+      exporters: [otlp]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, cumulativetodelta, transform, batch]
+      exporters: [otlp]

@@ -1,0 +1,11 @@
+type: spaneventstolog
+
+status:
+  class: connector
+  stability:
+    traces_to_logs: beta
+  distributions: [contrib]
+  codeowners:
+    active: [henrikrexed]
+    seeking_new: true
+

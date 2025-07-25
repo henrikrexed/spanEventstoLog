@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otelcol-custom-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+      filelog:
+        include: [ /var/log/app/*.log ]
+        operators:
+          - type: regex_parser
+            regex: '^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<severity>\w+) (?P<message>.*)$'
+            timestamp:
+              parse_from: time
+              layout: '2006-01-02 15:04:05'
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 1500
+
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+
+      k8sattributes:
+        filter:
+          node_from_env_var: KUBERNETES_SERVICE_HOST
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+
+      resource:
+        attributes:
+          - key: environment
+            value: "production"
+            action: insert
+          - key: service.version
+            from_attribute: k8s.pod.labels.app.kubernetes.io/version
+            action: insert
+
+      cumulativetodelta:
+        include:
+          match_type: regexp
+          metrics: [.*]
+
+      transform:
+        trace_statements:
+          - context: span
+            statements:
+              - set(attributes["processed"], true)
+        metric_statements:
+          - context: datapoint
+            statements:
+              - set(attributes["processed"], true)
+
+      filter:
+        spans:
+          include:
+            match_type: regexp
+            services: [.*]
+            span_names: [.*]
+
+    connectors:
+      spaneventstolog:
+        span_conditions:
+          - "attributes[\"http.status_code\"] == 503"
+          - "status.code == STATUS_CODE_ERROR"
+        event_conditions:
+          - "name == \"exception\""
+          - "attributes[\"exception.type\"] == \"requests.exceptions.ConnectionError\""
+        include_span_attributes: true
+        include_event_attributes: true
+        log_level: "Error"
+        log_body_template: "Connection Error in {{.SpanName}}: {{.EventName}} - {{.EventAttributes.exception.message}}"
+
+    exporters:
+      otlp:
+        endpoint: "http://otel-collector:4317"
+        tls:
+          insecure: true
+
+      otlphttp:
+        endpoint: "http://otel-collector:4318"
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, filelog]
+          processors: [memory_limiter, k8sattributes, resource, transform, filter, batch]
+          connectors: [spaneventstolog]
+          exporters: [otlp, otlphttp]
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter, k8sattributes, resource, transform, batch]
+          exporters: [otlp, otlphttp]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, cumulativetodelta, transform, batch]
+          exporters: [otlp, otlphttp]
+
+      extensions: [memory_limiter]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otelcol-custom
+  namespace: monitoring
+  labels:
+    app: otelcol-custom
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otelcol-custom
+  template:
+    metadata:
+      labels:
+        app: otelcol-custom
+    spec:
+      serviceAccountName: otelcol-custom
+      containers:
+      - name: otelcol-custom
+        image: otelcol-custom:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 55679
+          name: healthcheck
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otelcol
+        - name: app-logs
+          mountPath: /var/log/app
+        resources:
+          limits:
+            memory: 2Gi
+            cpu: 1000m
+          requests:
+            memory: 512Mi
+            cpu: 250m
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 55679
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 55679
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: otelcol-custom-config
+      - name: app-logs
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otelcol-custom
+  namespace: monitoring
+  labels:
+    app: otelcol-custom
+spec:
+  ports:
+  - port: 4317
+    targetPort: 4317
+    name: otlp-grpc
+  - port: 4318
+    targetPort: 4318
+    name: otlp-http
+  - port: 55679
+    targetPort: 55679
+    name: healthcheck
+  selector:
+    app: otelcol-custom
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otelcol-custom
+  namespace: monitoring 
