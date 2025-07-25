@@ -14,8 +14,12 @@ COPY . .
 # Generate vendor directory for reproducible builds and OCB compatibility
 RUN cd src && go mod vendor
 
-# Build the collector using the manifest and local replace
-RUN /go/bin/builder --config manifest.yaml
+RUN /go/bin/builder --skip-compilation --config manifest.yaml
+RUN cat dist/go.mod
+RUN cat dist/main.go
+RUN cd dist && go mod tidy
+
+
 
 # Stage 2: Create a minimal runtime image
 FROM gcr.io/distroless/base-debian11

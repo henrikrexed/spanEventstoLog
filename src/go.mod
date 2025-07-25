@@ -1,4 +1,4 @@
-module github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector
+module github.com/henrikrexed/spanEventstoLog
 
 go 1.23.0
 
@@ -12,9 +12,6 @@ require (
 	go.opentelemetry.io/collector/consumer v1.36.0
 	go.opentelemetry.io/collector/pdata v1.36.0
 	go.uber.org/zap v1.27.0
-)
-
-require (
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/antchfx/xmlquery v1.4.4 // indirect
 	github.com/antchfx/xpath v1.3.4 // indirect

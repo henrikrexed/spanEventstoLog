@@ -1,4 +1,4 @@
-.PHONY: all build test test-real docker-build clean bump-patch bump-minor bump-major
+.PHONY: all build test test-real docker-build clean bump-patch bump-minor bump-major release-minimal
 
 # Version management
 VERSION ?= 0.1.0
@@ -59,9 +59,14 @@ bump-major:
 	  $$1++; $$2=0; $$3=0; print $$1"."$$2"."$$3
 	}' VERSION > VERSION.tmp && mv VERSION.tmp VERSION
 
+# Build a minimal collector for debugging (uses minimal manifest)
+release-minimal:
+	$(CONTAINER_ENGINE) build $(DOCKER_PLATFORM) -t $(IMAGE_TAG)-minimal -f Dockerfile . --build-arg MANIFEST=ocb/manifest_minimal.yaml
+
 # Usage:
 #   make build [CONTAINER_ENGINE=docker|podman] [PLATFORM=linux/amd64|linux/arm64|...] [VERSION=x.y.z]
 #   make docker-build [CONTAINER_ENGINE=docker|podman] [PLATFORM=linux/amd64|linux/arm64|...] [VERSION=x.y.z]
+#   make release-minimal [CONTAINER_ENGINE=docker|podman] [PLATFORM=linux/amd64|linux/arm64|...] [VERSION=x.y.z]
 #   make test
 #   make test-real
 #   make bump-patch | bump-minor | bump-major 

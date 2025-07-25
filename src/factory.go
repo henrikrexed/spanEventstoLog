@@ -3,7 +3,7 @@ package spaneventstologconnector
 import (
 	"context"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector/internal/metadata"
+	"github.com/henrikrexed/spanEventstoLog/internal/metadata"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"

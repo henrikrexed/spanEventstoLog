@@ -20,7 +20,10 @@ processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.130.0
 
 connectors:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector v0.130.0
+  - gomod: github.com/henrikrexed/spanEventstoLog v0.0.0-local
+
+replace:
+  github.com/henrikrexed/spanEventstoLog => /Users/henrik.rexed/Library/CloudStorage/OneDrive-Dynatrace/Documents/spanEventstoLog/src
 
 extensions:
   - gomod: go.opentelemetry.io/collector/extension/memorylimiterextension v0.130.0
@@ -34,5 +37,4 @@ goarch:
   - amd64
   - arm64
 
-replace:
-  github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector => ../src 
+

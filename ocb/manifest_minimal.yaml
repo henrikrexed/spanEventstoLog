@@ -1,0 +1,28 @@
+dist:
+  name: otelcol-custom
+  description: "Minimal OpenTelemetry Collector with SpanEventsToLog Connector"
+  output_path: ./dist
+
+connectors:
+  - gomod: github.com/henrikrexed/spanEventstoLog v0.0.0-local
+
+replace:
+  github.com/henrikrexed/spanEventstoLog => /Users/henrik.rexed/Library/CloudStorage/OneDrive-Dynatrace/Documents/spanEventstoLog/src
+
+receivers:
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.130.0
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.130.0
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.130.0
+
+goos:
+  - linux
+  - darwin
+  - windows
+
+goarch:
+  - amd64
+  - arm64 
