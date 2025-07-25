@@ -20,7 +20,7 @@ processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.130.0
 
 connectors:
-  - gomod: github.com/henrikrexed/spanEventstoLog v0.0.0-local
+  - gomod: github.com/henrikrexed/spanEventstoLog v0.1
 
 replace:
   github.com/henrikrexed/spanEventstoLog => /Users/henrik.rexed/Library/CloudStorage/OneDrive-Dynatrace/Documents/spanEventstoLog/src

@@ -4,7 +4,7 @@ dist:
   output_path: ./dist
 
 connectors:
-  - gomod: github.com/henrikrexed/spanEventstoLog v0.0.0-local
+  - gomod: github.com/henrikrexed/spanEventstoLog v0.1
 
 replace:
   github.com/henrikrexed/spanEventstoLog => /Users/henrik.rexed/Library/CloudStorage/OneDrive-Dynatrace/Documents/spanEventstoLog/src
