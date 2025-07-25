@@ -33,35 +33,6 @@
 
 ---
 
-## Purpose
-
-The **SpanEventsToLog** connector (implemented as `SpanEventConnector`) is an OpenTelemetry Collector connector that transforms span events (such as exceptions or custom events) into log records. This enables:
-- **Error/event monitoring**: Convert exceptions and important span events into logs for alerting and analysis.
-- **Log enrichment**: Preserve trace context and span attributes in logs.
-- **Flexible filtering**: Use OTTL to select which span events become logs.
-- **Realistic validation**: Test against real-world trace data for robust production use.
-
----
-
-## Configuration Options
-
-| Option                   | Type      | Description                                                                                                    | Required | Example |
-|--------------------------|-----------|----------------------------------------------------------------------------------------------------------------|----------|---------|
-| `span_conditions`        | []string  | OTTL conditions for filtering spans. If empty, all spans are processed.                                        | No       | `["attributes[\"http.status_code\"] == 503"]` |
-| `event_conditions`       | []string  | OTTL conditions for filtering individual span events. If empty, all events are processed.                      | No       | `["name == \"exception\""]` |
-| `include_span_attributes`| bool      | Include span attributes in the generated log record.                                                           | No       | `true`  |
-| `include_event_attributes`| bool     | Include event attributes in the generated log record.                                                          | No       | `true`  |
-| `log_level`              | string    | Severity level for generated log records. One of: Trace, Debug, Info, Warn, Error, Fatal.                      | No       | `"Error"` |
-| `log_body_template`      | string    | Go template for the log body. Placeholders: `{{.EventName}}`, `{{.SpanName}}`, `{{.EventAttributes}}`, `{{.SpanAttributes}}`. | No       | `"Error in {{.SpanName}}: {{.EventName}}"` |
-
-### Validation Rules
-- At least one of `span_conditions` or `event_conditions` must be specified.
-- `log_level` must be one of: Trace, Debug, Info, Warn, Error, Fatal (case-sensitive).
-- `log_body_template` can only reference: `.EventName`, `.SpanName`, `.EventAttributes`, `.SpanAttributes`.
-- OTTL conditions are validated at startup; invalid expressions will cause startup failure.
-
----
-
 ## Getting Started
 
 ### 1. Minimal Example Configuration
@@ -118,24 +89,83 @@ service:
       exporters: [otlp]
 ```
 
-### 3. Build and Run
+### 3. Build, Tag, and Run (with Makefile)
 
-1. **Build the custom collector Docker image (default: linux/amd64):**
+1. **Build the custom collector Docker/Podman image (default: linux/amd64, docker, version 0.1.0):**
    ```sh
    make build
    # or, for a specific platform:
    make build PLATFORM=linux/arm64
-   # or, directly:
-   docker build --platform=linux/amd64 -t otelcol-custom .
+   # or, with Podman:
+   make build CONTAINER_ENGINE=podman
+   # or, with a custom version tag:
+   make build VERSION=1.2.3
+   # Combine options:
+   make build CONTAINER_ENGINE=podman PLATFORM=linux/arm64 VERSION=1.2.3
    ```
 2. **Run the collector with your config:**
    ```sh
-   docker run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 otelcol-custom
+   $(CONTAINER_ENGINE) run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 hrexed/otelcol-spanconnector:0.1.0
+   # or, for a custom version:
+   $(CONTAINER_ENGINE) run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 hrexed/otelcol-spanconnector:1.2.3
    ```
 3. **Send traces to the collector** (e.g., using an OTLP-compatible client).
 4. **View generated logs** in your configured log exporter (e.g., OTLP, file, etc).
 
 For more advanced configuration and usage, see the [Full Documentation](SpanEventsToLog_Documentation.md).
+
+---
+
+## Build, Test, and Versioning with Makefile
+
+- **Build:**
+  ```sh
+  make build [CONTAINER_ENGINE=docker|podman] [PLATFORM=linux/amd64|linux/arm64|...] [VERSION=x.y.z]
+  ```
+- **Test:**
+  ```sh
+  make test
+  make test-real
+  ```
+- **Version bump:**
+  ```sh
+  make bump-patch   # 0.1.0 -> 0.1.1
+  make bump-minor   # 0.1.0 -> 0.2.0
+  make bump-major   # 0.1.0 -> 1.0.0
+  ```
+- **Clean:**
+  ```sh
+  make clean
+  ```
+
+---
+
+## Purpose
+
+The **SpanEventsToLog** connector (implemented as `SpanEventConnector`) is an OpenTelemetry Collector connector that transforms span events (such as exceptions or custom events) into log records. This enables:
+- **Error/event monitoring**: Convert exceptions and important span events into logs for alerting and analysis.
+- **Log enrichment**: Preserve trace context and span attributes in logs.
+- **Flexible filtering**: Use OTTL to select which span events become logs.
+- **Realistic validation**: Test against real-world trace data for robust production use.
+
+---
+
+## Configuration Options
+
+| Option                   | Type      | Description                                                                                                    | Required | Example |
+|--------------------------|-----------|----------------------------------------------------------------------------------------------------------------|----------|---------|
+| `span_conditions`        | []string  | OTTL conditions for filtering spans. If empty, all spans are processed.                                        | No       | `["attributes[\"http.status_code\"] == 503"]` |
+| `event_conditions`       | []string  | OTTL conditions for filtering individual span events. If empty, all events are processed.                      | No       | `["name == \"exception\""]` |
+| `include_span_attributes`| bool      | Include span attributes in the generated log record.                                                           | No       | `true`  |
+| `include_event_attributes`| bool     | Include event attributes in the generated log record.                                                          | No       | `true`  |
+| `log_level`              | string    | Severity level for generated log records. One of: Trace, Debug, Info, Warn, Error, Fatal.                      | No       | `"Error"` |
+| `log_body_template`      | string    | Go template for the log body. Placeholders: `{{.EventName}}`, `{{.SpanName}}`, `{{.EventAttributes}}`, `{{.SpanAttributes}}`. | No       | `"Error in {{.SpanName}}: {{.EventName}}"` |
+
+### Validation Rules
+- At least one of `span_conditions` or `event_conditions` must be specified.
+- `log_level` must be one of: Trace, Debug, Info, Warn, Error, Fatal (case-sensitive).
+- `log_body_template` can only reference: `.EventName`, `.SpanName`, `.EventAttributes`, `.SpanAttributes`.
+- OTTL conditions are validated at startup; invalid expressions will cause startup failure.
 
 ---
 
