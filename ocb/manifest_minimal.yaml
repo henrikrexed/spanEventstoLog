@@ -4,10 +4,10 @@ dist:
   output_path: ./dist
 
 connectors:
-  - gomod: github.com/henrikrexed/spanEventstoLog v0.1
+  - gomod: github.com/henrikrexed/spanEventstoLog v0.0.0-20250725131340-8d2b1a7656e7
 
 replace:
-  github.com/henrikrexed/spanEventstoLog => /Users/henrik.rexed/Library/CloudStorage/OneDrive-Dynatrace/Documents/spanEventstoLog/src
+  github.com/henrikrexed/spanEventstoLog => ./src
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.130.0

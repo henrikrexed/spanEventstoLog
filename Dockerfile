@@ -7,9 +7,13 @@ WORKDIR /workspace
 RUN go install go.opentelemetry.io/collector/cmd/builder@latest
 
 # Copy OCB manifest and all source code (including local connector)
-COPY ocb/manifest.yaml .
+ARG MANIFEST=ocb/manifest.yaml
+COPY ${MANIFEST} ./manifest.yaml
 COPY src/ ./src
 COPY . .
+
+# Make git tags available for Go module resolution
+RUN cd src && git config --global --add safe.directory /workspace/src
 
 # Generate vendor directory for reproducible builds and OCB compatibility
 RUN cd src && go mod vendor
