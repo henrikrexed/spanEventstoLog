@@ -10,13 +10,12 @@ This directory now contains all necessary files to build a custom OpenTelemetry 
 - **`manifest.yaml`** - OCB manifest with all components
 - **`config.yaml`** - Collector configuration with pipelines
 - **`Dockerfile`** - Multi-stage Docker build
-- **`build.sh`** - Automated build script
 - **`test-build.sh`** - Comprehensive test script
 
 ### **Deployment Files**
 - **`k8s-deployment.yaml`** - Kubernetes deployment with ConfigMap
 - **`docker-compose.yml`** - Local development environment
-- **`prometheus.yml`** - Prometheus configuration
+
 
 ### **Documentation**
 - **`OCB_BUILD_README.md`** - Comprehensive build guide
@@ -24,41 +23,27 @@ This directory now contains all necessary files to build a custom OpenTelemetry 
 
 ## 🎯 **Components Included**
 
-### **Receivers** ✅
-- **OTLP Receiver** (`go.opentelemetry.io/collector/receiver/otlpreceiver v0.130.0`)
-  - Accepts traces, metrics, logs via gRPC (4317) and HTTP (4318)
-- **Filelog Receiver** (`github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.130.0`)
-  - Reads log files with regex parsing
+### **Receivers** ✅ (from `manifest.yaml`)
+- go.opentelemetry.io/collector/receiver/otlpreceiver v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.132.0
 
-### **Processors** ✅
-- **Memory Limiter** (`go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.130.0`)
-  - Prevents out-of-memory conditions
-- **Batch** (`go.opentelemetry.io/collector/processor/batchprocessor v0.130.0`)
-  - Batches telemetry data
-- **K8s Attributes** (`github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.130.0`)
-  - Adds Kubernetes metadata
-- **Resource** (`go.opentelemetry.io/collector/processor/resourceprocessor v0.130.0`)
-  - Adds resource-level attributes
-- **Cumulative to Delta** (`github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.130.0`)
-  - Converts cumulative metrics to delta
-- **Transform** (`github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.130.0`)
-  - Modifies telemetry using OTTL
-- **Filter** (`github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.130.0`)
-  - Filters telemetry data
+### **Processors** ✅ (from `manifest.yaml`)
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.132.0
+- go.opentelemetry.io/collector/processor/resourceprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.132.0
+- go.opentelemetry.io/collector/processor/batchprocessor v0.132.0
 
-### **Connectors** ✅
-- **SpanEventsToLog** (`github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector v0.130.0`)
-  - Converts span events to logs with filtering
+### **Connectors** ✅ (from `manifest.yaml`)
+- github.com/henrikrexed/spanEventstoLog v0.1.0 (replaced locally during Docker build)
 
-### **Exporters** ✅
-- **OTLP Exporter** (`go.opentelemetry.io/collector/exporter/otlpexporter v0.130.0`)
-  - Sends data via gRPC
-- **OTLP HTTP Exporter** (`go.opentelemetry.io/collector/exporter/otlphttpexporter v0.130.0`)
-  - Sends data via HTTP
+### **Exporters** ✅ (from `manifest.yaml`)
+- go.opentelemetry.io/collector/exporter/otlpexporter v0.132.0
+- go.opentelemetry.io/collector/exporter/otlphttpexporter v0.132.0
 
-### **Extensions** ✅
-- **Memory Limiter** (`go.opentelemetry.io/collector/extension/memorylimiterextension v0.130.0`)
-  - Monitors memory usage
+### **Extensions** ✅ (from `manifest.yaml`)
+- go.opentelemetry.io/collector/extension/memorylimiterextension v0.132.0
 
 ## 🚀 **Quick Start Commands**
 
@@ -67,9 +52,10 @@ This directory now contains all necessary files to build a custom OpenTelemetry 
 ./build.sh
 ```
 
-### **2. Test the Build**
+### **2. Build the Image via Make**
 ```bash
-./test-build.sh
+make docker-build            # Full release (manifest.yaml)
+make release-minimal         # Minimal release (manifest_minimal.yaml)
 ```
 
 ### **3. Run Locally**
@@ -77,7 +63,7 @@ This directory now contains all necessary files to build a custom OpenTelemetry 
 ./dist/otelcol-custom_$(go env GOOS)_$(go env GOARCH) --config config.yaml
 ```
 
-### **4. Build Docker Image**
+### **4. Build Docker Image (Alternative)**
 ```bash
 docker build -t otelcol-custom:latest .
 ```
@@ -116,20 +102,7 @@ connectors:
 - **Logs Pipeline**: Filelog → Processors → OTLP
 - **Metrics Pipeline**: OTLP → Processors → OTLP
 
-## 📊 **Real-World Integration**
 
-### **Based on Real Span Data Analysis**
-The configuration is optimized for the real span data you provided:
-- **Service**: `loadgenerator` (Python OpenTelemetry)
-- **Endpoints**: `/api/cart`, `/api/products/*`, `/api/checkout`
-- **Events**: Exception events with `ConnectionError`
-- **Status Codes**: 503 (Service Unavailable)
-
-### **Use Cases Supported**
-1. **Error Monitoring**: Monitor exception events in error spans
-2. **Service-Specific Monitoring**: Track errors for specific services
-3. **Connection Error Detection**: Focus on connection-related issues
-4. **Template-Based Logging**: Generate structured logs from span events
 
 ## 🧪 **Testing Capabilities**
 
@@ -189,14 +162,14 @@ curl -X POST http://localhost:4318/v1/traces \
 To update component versions, modify `manifest.yaml`:
 ```yaml
 exporters:
-  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.131.0  # Update version
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.132.0  # Update version
 ```
 
 ### **Adding Components**
 Add new components to `manifest.yaml`:
 ```yaml
 processors:
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/newprocessor v0.130.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/newprocessor v0.132.0
 ```
 
 ## 📚 **Documentation Index**

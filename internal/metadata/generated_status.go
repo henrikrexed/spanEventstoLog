@@ -8,7 +8,7 @@ import (
 
 var (
 	Type      = component.MustNewType("spaneventstolog")
-	ScopeName = "github.com/open-telemetry/opentelemetry-collector-contrib/connector/spaneventstologconnector"
+	ScopeName = "github.com/henrikrexed/spanEventstoLog"
 )
 
 const (

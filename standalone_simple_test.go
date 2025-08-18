@@ -5,7 +5,7 @@ import (
 )
 
 // TestConfigValidation tests configuration validation using the real Config struct
-func TestConfigValidation(t *testing.T) {
+func TestStandalone_ConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *Config
@@ -62,7 +62,7 @@ func TestConfigValidation(t *testing.T) {
 }
 
 // TestConfigBasic tests the basic configuration structure using the real Config struct
-func TestConfigBasic(t *testing.T) {
+func TestStandalone_ConfigBasic(t *testing.T) {
 	config := &Config{
 		SpanConditions:         []string{"IsMatch(name, \"test-span\")"},
 		EventConditions:        []string{},

@@ -114,28 +114,33 @@ For more advanced configuration and usage, see the [Main README](../README.md) a
 
 ## 📋 Components Included
 
-### **Receivers**
-- **OTLP Receiver**: Accepts traces, metrics, and logs via gRPC (4317) and HTTP (4318)
-- **Filelog Receiver**: Reads log files with regex parsing capabilities
+The components included are defined by `ocb/manifest.yaml`.
 
-### **Processors**
-- **Memory Limiter**: Prevents out-of-memory conditions
-- **Batch**: Batches telemetry data for efficient transmission
-- **K8s Attributes**: Adds Kubernetes metadata to telemetry
-- **Resource**: Adds resource-level attributes
-- **Cumulative to Delta**: Converts cumulative metrics to delta
-- **Transform**: Modifies telemetry data using OTTL
-- **Filter**: Filters telemetry data based on conditions
+### **Receivers** (from `manifest.yaml`)
+- go.opentelemetry.io/collector/receiver/otlpreceiver v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.132.0
 
-### **Connectors**
-- **SpanEventsToLog**: Converts span events to log records with configurable filtering
+### **Processors** (from `manifest.yaml`)
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.132.0
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.132.0
+- go.opentelemetry.io/collector/processor/resourceprocessor v0.132.0
+- go.opentelemetry.io/collector/processor/batchprocessor v0.132.0
 
-### **Exporters**
-- **OTLP Exporter**: Sends data via gRPC
-- **OTLP HTTP Exporter**: Sends data via HTTP
+### **Connectors** (from `manifest.yaml`)
+- github.com/henrikrexed/spanEventstoLog v0.1.0 (replaced locally to `/workspace` during Docker build)
 
-### **Extensions**
-- **Memory Limiter**: Monitors memory usage
+### **Exporters** (from `manifest.yaml`)
+- go.opentelemetry.io/collector/exporter/otlpexporter v0.132.0
+- go.opentelemetry.io/collector/exporter/otlphttpexporter v0.132.0
+
+### **Extensions** (from `manifest.yaml`)
+- go.opentelemetry.io/collector/extension/memorylimiterextension v0.132.0
+
+Target platforms:
+- goos: linux, darwin, windows
+- goarch: amd64, arm64
 
 ## 🚀 **Quick Start**
 
@@ -143,10 +148,7 @@ For more advanced configuration and usage, see the [Main README](../README.md) a
 
 ```bash
 # Make build script executable (if needed)
-chmod +x build.sh
-
-# Run the build script
-./build.sh
+make build
 ```
 
 This will:
@@ -370,6 +372,41 @@ processors:
 ```
 
 Then update `config.yaml` to use the new component.
+
+---
+
+## 🛠️ Build via Makefile (recommended)
+
+Instead of installing and invoking `builder` directly, you can build container images using the Make targets at the repo root. These targets internally use the Dockerfile, which runs OCB inside the build container with the appropriate manifest.
+
+Full release (uses `ocb/manifest.yaml`):
+
+```bash
+make docker-build                      # build for host CPU arch
+make docker-build PLATFORM=linux/amd64 # build for x86_64
+make docker-build CONTAINER_ENGINE=podman
+make docker-build VERSION=1.2.3
+```
+
+Minimal release (only this connector, uses `ocb/manifest_minimal.yaml`):
+
+```bash
+make release-minimal
+make release-minimal PLATFORM=linux/amd64
+```
+
+Run the resulting image (example):
+
+```bash
+docker run --rm -p 4317:4317 -p 4318:4318 -p 55679:55679 \
+  -v $(pwd)/collector/config.yaml:/otel/config.yaml \
+  hrexed/otelcol-spanconnector:0.1.0
+
+# minimal image example
+docker run --rm -p 4317:4317 -p 4318:4318 -p 55679:55679 \
+  -v $(pwd)/collector/config.yaml:/otel/config.yaml \
+  hrexed/otelcol-spanconnector:0.1.0-minimal
+```
 
 ## 📚 **Additional Resources**
 

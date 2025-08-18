@@ -91,7 +91,9 @@ service:
 
 ### 3. Build, Tag, and Run (with Makefile)
 
-1. **Build the custom collector Docker/Podman image (default: linux/amd64, docker, version 0.1.0):**
+1. **Build images**
+
+   Full release (uses `ocb/manifest.yaml`):
    ```sh
    make build
    # or, for a specific platform:
@@ -103,11 +105,23 @@ service:
    # Combine options:
    make build CONTAINER_ENGINE=podman PLATFORM=linux/arm64 VERSION=1.2.3
    ```
+   Produces: `hrexed/otelcol-spanconnector:<version>` and `hrexed/otelcol-spanconnector:latest`
+
+   Minimal release (simple collector with only this connector, uses `ocb/manifest_minimal.yaml`):
+   ```sh
+   make release-minimal
+   make release-minimal PLATFORM=linux/amd64
+   make release-minimal CONTAINER_ENGINE=podman
+   make release-minimal VERSION=1.2.3
+   ```
+   Produces: `hrexed/otelcol-spanconnector:<version>-minimal`
 2. **Run the collector with your config:**
    ```sh
    $(CONTAINER_ENGINE) run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 hrexed/otelcol-spanconnector:0.1.0
    # or, for a custom version:
    $(CONTAINER_ENGINE) run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 hrexed/otelcol-spanconnector:1.2.3
+   # minimal image:
+   $(CONTAINER_ENGINE) run --rm -v $(pwd)/collector/config.yaml:/otel/config.yaml -p 4317:4317 -p 4318:4318 -p 55679:55679 hrexed/otelcol-spanconnector:0.1.0-minimal
    ```
 3. **Send traces to the collector** (e.g., using an OTLP-compatible client).
 4. **View generated logs** in your configured log exporter (e.g., OTLP, file, etc).
@@ -200,16 +214,13 @@ spanEventstoLog/
 ├── Dockerfile                 # Docker build for custom collector
 ├── metadata.yaml              # Metadata for the connector
 ├── spanEventstoLog.iml        # IDE/project file
-├── src/                       # All Go code, tests, and test data
-│   ├── connector.go           # Main connector implementation (SpanEventConnector)
-│   ├── factory.go             # Factory for creating connector instances
-│   ├── config.go              # Configuration and validation
-│   ├── go.mod, go.sum         # Go dependencies
-│   ├── simple_test.go, standalone_simple_test.go, realistic_standalone_test.go  # Tests
-│   ├── REALISTIC_TEST_SUMMARY.md, TEST_FAILURE_ANALYSIS.md  # Test docs
-│   ├── realistic_traces/      # Realistic test data (JSON traces, nested by time)
-│   │   └── month=05/day=23/hour=13/minute=.../traces_*.json
-│   └── internal/              # (if used by Go code)
+├── connector.go               # Main connector implementation (SpanEventConnector)
+├── factory.go                 # Factory for creating connector instances
+├── config.go                  # Configuration and validation
+├── go.mod, go.sum            # Go dependencies
+├── standalone_simple_test.go, realistic_standalone_test.go  # Tests
+├── REALISTIC_TEST_SUMMARY.md, TEST_FAILURE_ANALYSIS.md  # Test docs
+├── internal/                  # Internal packages (if used by Go code)
 ├── ocb/                       # OCB (OpenTelemetry Collector Builder) files
 │   ├── manifest.yaml          # OCB manifest for custom collector
 │   ├── OCB_BUILD_README.md    # OCB build instructions
@@ -247,8 +258,8 @@ make build PLATFORM=arm      # For arm64
 
 ### Test Types
 - **Simple/Standalone Tests**: Validate configuration and basic logic (no real data).
-- **Realistic Tests**: Validate connector logic using real trace data in `src/realistic_traces/`.
-- **All Tests**: Run all Go tests in `src/`.
+- **Realistic Tests**: Validate connector logic using real trace data.
+- **All Tests**: Run all Go tests in the root directory.
 
 ### Running Tests
 
@@ -267,7 +278,7 @@ make build PLATFORM=arm      # For arm64
 
 **Test Output:**
 - Success: All tests should pass with `ok` or `PASS`.
-- Failure: Review the output for errors and check your test data in `src/realistic_traces/`.
+- Failure: Review the output for errors and check your test data.
 
 ---
 
@@ -290,14 +301,19 @@ make ocb-dist PLATFORM=arm
 ## Building and Running the Docker Image
 
 ### Build Docker Image
-Builds a Docker image for the custom collector:
+Build images via Makefile targets:
 ```sh
+# Full release (ocb/manifest.yaml)
 make docker-build
-# or for a specific platform:
-make docker-build PLATFORM=x86_64
-make docker-build PLATFORM=arm
+make docker-build PLATFORM=linux/amd64
+
+# Minimal release (ocb/manifest_minimal.yaml)
+make release-minimal
+make release-minimal PLATFORM=linux/amd64
 ```
-- Image name: `otelcol-custom:latest`
+Image tags:
+- Full: `hrexed/otelcol-spanconnector:<version>`, `hrexed/otelcol-spanconnector:latest`
+- Minimal: `hrexed/otelcol-spanconnector:<version>-minimal`
 
 ### Run with Docker Compose
 Launch the collector and supporting services (Prometheus, Jaeger, Grafana if configured):
@@ -426,7 +442,7 @@ You can expand this example with processors, additional exporters, or more advan
 
 ---
 ## Realistic Test Data
-- Place your real trace JSON files in `src/realistic_traces/`.
+- Place your real trace JSON files in the appropriate test directory.
 - The realistic tests will use these files to validate connector logic against real-world scenarios.
 
 ---

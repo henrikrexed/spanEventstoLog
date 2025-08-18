@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +30,10 @@ type SpanEventConnector struct {
 	bodyTemplate *template.Template
 	spanOttl     []*ottl.Statement[ottlspan.TransformContext]
 	eventOttl    []*ottl.Statement[ottlspanevent.TransformContext]
+
+	// Telemetry counters
+	spansHandledCounter metric.Int64Counter
+	logsProducedCounter metric.Int64Counter
 }
 
 // NewSpanEventConnector creates a new SpanEventConnector instance
@@ -73,13 +78,37 @@ func NewSpanEventConnector(
 		eventOttl = append(eventOttl, stmt)
 	}
 
+	// Initialize metrics instruments when a MeterProvider is available
+	var spansHandled metric.Int64Counter
+	var logsProduced metric.Int64Counter
+	if set.MeterProvider != nil {
+		meter := set.MeterProvider.Meter("github.com/henrikrexed/spanEventstoLog")
+		// Best-effort instrument creation; ignore errors to avoid breaking data path
+		if c, err := meter.Int64Counter(
+			"spaneventstolog.spans_handled",
+			metric.WithDescription("Number of spans that passed connector span conditions"),
+			metric.WithUnit("{spans}"),
+		); err == nil {
+			spansHandled = c
+		}
+		if c, err := meter.Int64Counter(
+			"spaneventstolog.logs_produced",
+			metric.WithDescription("Number of logs produced from span events"),
+			metric.WithUnit("{logs}"),
+		); err == nil {
+			logsProduced = c
+		}
+	}
+
 	return &SpanEventConnector{
-		config:       config,
-		logger:       set.Logger,
-		consumer:     nextConsumer,
-		bodyTemplate: bodyTemplate,
-		spanOttl:     spanOttl,
-		eventOttl:    eventOttl,
+		config:              config,
+		logger:              set.Logger,
+		consumer:            nextConsumer,
+		bodyTemplate:        bodyTemplate,
+		spanOttl:            spanOttl,
+		eventOttl:           eventOttl,
+		spansHandledCounter: spansHandled,
+		logsProducedCounter: logsProduced,
 	}, nil
 }
 
@@ -89,6 +118,9 @@ func (c *SpanEventConnector) Capabilities() consumer.Capabilities {
 
 func (c *SpanEventConnector) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
 	logs := plog.NewLogs()
+
+	var numSpansHandled int64
+	var numLogsProduced int64
 
 	resourceSpansSlice := td.ResourceSpans()
 	for i := 0; i < resourceSpansSlice.Len(); i++ {
@@ -104,10 +136,12 @@ func (c *SpanEventConnector) ConsumeTraces(ctx context.Context, td ptrace.Traces
 				if !c.matchesSpanConditionsWithContext(span, resource, scope, scopeSpans, resourceSpans) {
 					continue
 				}
+				numSpansHandled++
 				for l := 0; l < span.Events().Len(); l++ {
 					event := span.Events().At(l)
 					if c.matchesEventConditionsWithContext(event, span, resource, scope, scopeSpans, resourceSpans) {
 						c.createLogRecord(event, span, resource, scope, logs)
+						numLogsProduced++
 					}
 				}
 			}
@@ -116,6 +150,14 @@ func (c *SpanEventConnector) ConsumeTraces(ctx context.Context, td ptrace.Traces
 
 	if logs.ResourceLogs().Len() > 0 {
 		return c.consumer.ConsumeLogs(ctx, logs)
+	}
+
+	// Record metrics outside of the tight loops
+	if c.spansHandledCounter != nil && numSpansHandled > 0 {
+		c.spansHandledCounter.Add(ctx, numSpansHandled)
+	}
+	if c.logsProducedCounter != nil && numLogsProduced > 0 {
+		c.logsProducedCounter.Add(ctx, numLogsProduced)
 	}
 
 	return nil

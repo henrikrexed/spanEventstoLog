@@ -1,35 +1,44 @@
 # Stage 1: Build the custom collector with OCB
-FROM golang:1.23 as builder
+FROM --platform=$BUILDPLATFORM golang:1.23 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ENV CGO_ENABLED=0
 
 WORKDIR /workspace
 
 # Install OCB (OpenTelemetry Collector Builder)
 RUN go install go.opentelemetry.io/collector/cmd/builder@latest
 
-# Copy OCB manifest and all source code (including local connector)
+# Copy OCB manifest
 ARG MANIFEST=ocb/manifest.yaml
 COPY ${MANIFEST} ./manifest.yaml
-COPY src/ ./src
-COPY . .
 
-# Make git tags available for Go module resolution
-RUN cd src && git config --global --add safe.directory /workspace/src
+# Copy Go module files first for better layer caching
+COPY go.mod go.sum ./
+
+# Copy source code files to the workspace (module root)
+COPY connector.go factory.go config.go ./
+COPY internal/ ./internal/
+
+# Make git tags available for Go module resolution (if needed)
+RUN git config --global --add safe.directory /workspace || true
 
 # Generate vendor directory for reproducible builds and OCB compatibility
-RUN cd src && go mod vendor
+RUN go mod vendor
 
-RUN /go/bin/builder --skip-compilation --config manifest.yaml
-RUN cat dist/go.mod
-RUN cat dist/main.go
-RUN cd dist && go mod tidy
-
-
+# Build the custom collector (compile for the requested target platform)
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} /go/bin/builder --config manifest.yaml
+RUN echo "Built artifacts:" && ls -la dist || true
 
 # Stage 2: Create a minimal runtime image
 FROM gcr.io/distroless/base-debian11
 
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /otel
-COPY --from=builder /workspace/dist/otelcol-custom_linux_amd64 ./otelcol-custom
+COPY --from=builder /workspace/dist/otelcol-custom ./otelcol-custom
 
 # Copy configuration files
 COPY collector/config.yaml .

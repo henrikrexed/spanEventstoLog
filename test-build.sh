@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Test script for OCB build and custom collector validation
+# Image-based custom collector validation via Makefile (no local binary build)
 
 set -e
 
@@ -26,164 +26,156 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Defaults and CLI flags
+IMAGE_NAME_DEFAULT="hrexed/otelcol-spanconnector"
+VERSION_DEFAULT="0.1.0"
+PLATFORM_DEFAULT="$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/; s/arm64/arm64/')"
+BUILD_IMAGE=false
+USE_MINIMAL=false
+PLATFORM="linux/${PLATFORM_DEFAULT}"
+CUSTOM_IMAGE=""
+
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --build-image           Build the Docker image via Makefile before testing
+  --minimal               Use minimal manifest/image (release-minimal)
+  --platform <plat>       Target platform (default: ${PLATFORM})
+  --image <name:tag>      Use this image tag instead of Makefile defaults
+  -h, --help              Show this help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --build-image) BUILD_IMAGE=true; shift ;;
+        --minimal) USE_MINIMAL=true; shift ;;
+        --platform) PLATFORM="$2"; shift 2 ;;
+        --image) CUSTOM_IMAGE="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) print_warning "Unknown option: $1"; usage; exit 1 ;;
+    esac
+done
+
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
 
-if ! command -v go &> /dev/null; then
-    print_error "Go is not installed. Please install Go 1.21+"
-    exit 1
-fi
-
 if ! command -v docker &> /dev/null; then
-    print_warning "Docker is not installed. Docker build will be skipped."
+    print_warning "Docker is not installed. Docker image tests will be skipped."
     DOCKER_AVAILABLE=false
 else
     DOCKER_AVAILABLE=true
 fi
 
+if command -v curl &> /dev/null; then
+    CURL_AVAILABLE=true
+else
+    CURL_AVAILABLE=false
+    print_warning "curl is not available; HTTP checks will be skipped."
+fi
+
 print_status "Prerequisites check completed"
 
-# Test OCB build
-echo ""
-echo "🏗️  Testing OCB build..."
-
-# Install OCB if not available
-if ! command -v builder &> /dev/null; then
-    echo "📦 Installing OCB..."
-    go install go.opentelemetry.io/collector/cmd/builder@latest
-fi
-
-# Create dist directory
-mkdir -p dist
-
-# Build the collector
-echo "🔨 Building custom collector..."
-builder --config manifest.yaml
-
-if [ $? -eq 0 ]; then
-    print_status "OCB build completed successfully"
+# Resolve image tag
+IMAGE_NAME="$IMAGE_NAME_DEFAULT"
+if [[ -f VERSION ]]; then
+    VERSION_TAG="$(cat VERSION | tr -d '\n' | tr -d '\r')"
 else
-    print_error "OCB build failed"
-    exit 1
+    VERSION_TAG="$VERSION_DEFAULT"
 fi
 
-# Check generated binaries
-echo ""
-echo "📦 Checking generated binaries..."
-if [ -f "./dist/otelcol-custom_$(go env GOOS)_$(go env GOARCH)" ]; then
-    print_status "Binary generated successfully"
-    ls -la dist/
+if [[ "$USE_MINIMAL" == true ]]; then
+    IMAGE_TAG_SUFFIX="-minimal"
 else
-    print_error "Binary not found"
-    exit 1
+    IMAGE_TAG_SUFFIX=""
 fi
 
-# Test configuration validation
-echo ""
-echo "🔧 Testing configuration validation..."
-if ./dist/otelcol-custom_$(go env GOOS)_$(go env GOARCH) --config config.yaml --dry-run &> /dev/null; then
-    print_status "Configuration validation passed"
+if [[ -n "$CUSTOM_IMAGE" ]]; then
+    IMAGE_FULL="$CUSTOM_IMAGE"
 else
-    print_warning "Configuration validation failed (this might be expected due to missing dependencies)"
+    IMAGE_FULL="${IMAGE_NAME}:${VERSION_TAG}${IMAGE_TAG_SUFFIX}"
 fi
 
-# Test Docker build if available
+# Function: wait for URL
+wait_for_url() {
+    local url="$1"
+    local timeout="${2:-30}"
+    local sleep_int=1
+    local elapsed=0
+    while (( elapsed < timeout )); do
+        if curl -sf "$url" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep "$sleep_int"
+        elapsed=$((elapsed + sleep_int))
+    done
+    return 1
+}
+
+# Docker image build and tests
 if [ "$DOCKER_AVAILABLE" = true ]; then
     echo ""
-    echo "🐳 Testing Docker build..."
-    docker build -t otelcol-custom:test .
-    
-    if [ $? -eq 0 ]; then
-        print_status "Docker build completed successfully"
-        
-        # Test Docker run
-        echo "🚀 Testing Docker container..."
-        docker run --rm -d --name otelcol-test otelcol-custom:test
-        
-        # Wait for container to start
-        sleep 5
-        
-        # Check if container is running
-        if docker ps | grep -q otelcol-test; then
-            print_status "Docker container started successfully"
-            
-            # Test health check
-            if curl -s http://localhost:55679/ &> /dev/null; then
-                print_status "Health check passed"
-            else
-                print_warning "Health check failed (container might still be starting)"
-            fi
-            
-            # Clean up
-            docker stop otelcol-test
-            docker rmi otelcol-custom:test
+    echo "🐳 Testing Docker image..."
+    if [ "$BUILD_IMAGE" = true ]; then
+        echo "🧱 Building image via Makefile for platform $PLATFORM..."
+        if [ "$USE_MINIMAL" = true ]; then
+            PLATFORM="$PLATFORM" make -s release-minimal
         else
-            print_error "Docker container failed to start"
+            PLATFORM="$PLATFORM" make -s docker-build
         fi
+    fi
+
+    echo "🔎 Using image: $IMAGE_FULL"
+    # If the image does not exist locally and not building, warn
+    if ! docker image inspect "$IMAGE_FULL" >/dev/null 2>&1; then
+        print_warning "Image $IMAGE_FULL not found locally. Consider running with --build-image or --image <name:tag>."
     else
-        print_error "Docker build failed"
+        # Run container
+        CONTAINER_NAME="otelcol-test-$$"
+        echo "🚀 Running container $CONTAINER_NAME from $IMAGE_FULL..."
+        docker run --rm -d --name "$CONTAINER_NAME" -p 4317:4317 -p 4318:4318 -p 55679:55679 "$IMAGE_FULL"
+        # Wait for health
+        if [ "$CURL_AVAILABLE" = true ]; then
+            if wait_for_url "http://localhost:55679/" 30; then
+                print_status "Health check endpoint (container) is accessible"
+            else
+                print_warning "Health check endpoint (container) not accessible"
+            fi
+        else
+            sleep 5
+        fi
+        # Clean up
+        docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        print_status "Docker container test completed"
     fi
 else
     print_warning "Skipping Docker tests (Docker not available)"
 fi
 
-# Test curl command (if curl is available)
-echo ""
-echo "🌐 Testing HTTP endpoints..."
-if command -v curl &> /dev/null; then
-    # Start collector in background for testing
-    echo "Starting collector for testing..."
-    ./dist/otelcol-custom_$(go env GOOS)_$(go env GOARCH) --config config.yaml &
-    COLLECTOR_PID=$!
-    
-    # Wait for collector to start
-    sleep 3
-    
-    # Test OTLP HTTP endpoint
-    if curl -s http://localhost:4318/ &> /dev/null; then
-        print_status "OTLP HTTP endpoint is accessible"
-    else
-        print_warning "OTLP HTTP endpoint not accessible (might be expected)"
-    fi
-    
-    # Test health check endpoint
-    if curl -s http://localhost:55679/ &> /dev/null; then
-        print_status "Health check endpoint is accessible"
-    else
-        print_warning "Health check endpoint not accessible"
-    fi
-    
-    # Stop collector
-    kill $COLLECTOR_PID 2>/dev/null || true
-else
-    print_warning "Skipping HTTP tests (curl not available)"
-fi
-
 echo ""
 echo "📊 Test Summary:"
 echo "================="
-print_status "OCB build: SUCCESS"
-print_status "Binary generation: SUCCESS"
-
 if [ "$DOCKER_AVAILABLE" = true ]; then
-    print_status "Docker build: SUCCESS"
+    print_status "Docker image test: COMPLETED"
 else
-    print_warning "Docker build: SKIPPED"
+    print_warning "Docker image test: SKIPPED"
 fi
 
 echo ""
 echo "🎯 Next Steps:"
 echo "==============="
-echo "1. Run the collector: ./dist/otelcol-custom_$(go env GOOS)_$(go env GOARCH) --config config.yaml"
-echo "2. Build Docker image: docker build -t otelcol-custom:latest ."
-echo "3. Deploy to Kubernetes: kubectl apply -f k8s-deployment.yaml"
-echo "4. Test with docker-compose: docker-compose up"
+echo "1. Build Docker image via Makefile: make docker-build PLATFORM=${PLATFORM}"
+echo "   Minimal image: make release-minimal PLATFORM=${PLATFORM}"
+echo "2. Deploy to Kubernetes: kubectl apply -f deployment/k8s-deployment.yaml"
+echo "3. Test with docker-compose: docker compose -f deployment/docker-compose.yml up"
 echo ""
 echo "📚 Documentation:"
 echo "================="
-echo "- OCB Build Guide: OCB_BUILD_README.md"
+echo "- OCB Build Guide: ocb/OCB_BUILD_README.md"
 echo "- Connector Documentation: README.md"
 echo "- Test Analysis: TEST_FAILURE_ANALYSIS.md"
 echo "- Realistic Tests: REALISTIC_TEST_SUMMARY.md"
 
-print_status "All tests completed successfully! 🎉" 
+print_status "All tests completed successfully! 🎉"

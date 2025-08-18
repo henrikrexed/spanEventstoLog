@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+*.iml
+
+# Build artifacts
+dist/
+vendor/
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Test files
+*_test.go
+test-*.sh
+TEST_*.md
+REALISTIC_*.md
+
+# Deployment files
+deployment/
+.github/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.out
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore 
