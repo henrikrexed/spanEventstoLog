@@ -2,11 +2,11 @@ name: CI & Security
 
 on:
   push:
-    branches: ["main", "*"]
+    branches: ["main"]
     tags:
       - 'v*'
   pull_request:
-    branches: ["main", "*"]
+    branches: ["main"]
 
 jobs:
   build-and-test:
@@ -34,8 +34,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Build
-        run: make build
+      - name: Build binary
+        run: make build-binary
 
       - name: Run all tests
         run: make test
@@ -127,4 +127,4 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          generate_release_notes: true 
+          generate_release_notes: true
