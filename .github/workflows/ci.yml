@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: *.out
+          path: "*.out"
           if-no-files-found: ignore
 
   sbom:
@@ -64,6 +64,7 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Generate SBOM
+        shell: bash
         run: syft . -o spdx-json > sbom.spdx.json
 
       - name: Upload SBOM
