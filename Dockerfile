@@ -1,5 +1,5 @@
 # Stage 1: Build the custom collector with OCB
-FROM --platform=$BUILDPLATFORM golang:1.23 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
